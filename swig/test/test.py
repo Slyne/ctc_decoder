@@ -84,4 +84,4 @@ result2 = decoder.ctc_beam_search_decoder_batch(batch_chunk_log_prob_seq,
                                                  batch_start,
                                                  beam_size, 1, 6, 1, 0.9999, scorer)
 
-print(decoder.map_batch([result1[0][0][1], result1[1][0][1]], vocab_list))
+print(decoder.map_batch([result1[0][0][1], result1[1][0][1]], vocab_list, 1))
