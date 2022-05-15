@@ -13,4 +13,4 @@ cd ctc_decoder/swig && bash setup.sh
 
 ## Usage
 
-TO ADD
+Please refer to ```swig/test/test_en.py``` and ```swig/test/test_zh.py``` for how to do streaming decoding and offline decoding w/o language model.
