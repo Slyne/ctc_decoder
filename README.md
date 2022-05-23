@@ -1,6 +1,11 @@
 ## Installation
 
 We adapted this ctc decoder from [here](https://github.com/PaddlePaddle/DeepSpeech/tree/develop/deepspeech/decoders/swig).
+This decoder can only run on cpu.
+
+* continuous decoding for streaming asr
+* support kenlm language model
+* multiprocessing
 
 To install the decoder:
 ```bash
