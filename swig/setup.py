@@ -18,6 +18,7 @@ from __future__ import division
 from __future__ import print_function
 
 from setuptools import setup, Extension, distutils
+from distutils import ccompiler
 import glob
 import platform
 import os, sys
