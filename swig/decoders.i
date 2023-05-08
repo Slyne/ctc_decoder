@@ -4,11 +4,14 @@
 #include "ctc_beam_search_decoder.h"
 #include "decoder_utils.h"
 #include "path_trie.h"
+#include "hotwords.h"
 %}
 
 %include "std_vector.i"
 %include "std_pair.i"
 %include "std_string.i"
+%include "std_map.i"
+%include "std_unordered_map.i"
 %include "path_trie.h"
 %import "decoder_utils.h"
 
@@ -27,11 +30,15 @@ namespace std {
     %template(IntVector3) std::vector<std::vector<std::vector<int>>>;
     %template(TrieVector) std::vector<PathTrie*>;
     %template(BoolVector) std::vector<bool>;
+    %template(HotWordsMap) unordered_map<string, float>;
+    %template(BatchHotwords) std::vector<HotWordsBoosting *>;
 }
 %template(IntDoublePairCompSecondRev) pair_comp_second_rev<int, double>;
 %template(StringDoublePairCompSecondRev) pair_comp_second_rev<std::string, double>;
 %template(DoubleStringPairCompFirstRev) pair_comp_first_rev<double, std::string>;
 
+%include "hotwords.h"
 %include "scorer.h"
 %include "path_trie.h"
 %include "ctc_beam_search_decoder.h"
+

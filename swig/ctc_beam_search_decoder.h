@@ -26,6 +26,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Copyright (c) 2023, 58.com(Wuba) Inc AI Lab. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Modified from DeepSpeech(https://github.com/mozilla/DeepSpeech)
+
 #ifndef CTC_BEAM_SEARCH_DECODER_H_
 #define CTC_BEAM_SEARCH_DECODER_H_
 
@@ -34,6 +49,7 @@
 #include <vector>
 #include "path_trie.h"
 #include "scorer.h"
+#include "hotwords.h"
 
 /* CTC Beam Search Decoder
 
@@ -61,7 +77,9 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
     const std::vector<std::vector<double>> &log_probs_seq,
     const std::vector<std::vector<int>> &log_probs_idx, PathTrie &root,
     const bool start, size_t beam_size, int blank_id = 0, int space_id = -1,
-    double cutoff_prob = 0.999, Scorer *ext_scorer = nullptr);
+    double cutoff_prob = 0.999, Scorer *ext_scorer = nullptr,
+    HotWordsBoosting *hotwords_scorer = nullptr,
+    const bool use_ngram_score = false);
 
 /* CTC Beam Search Decoder for batch data
 
@@ -95,7 +113,9 @@ ctc_beam_search_decoder_batch(
     std::vector<PathTrie *> &batch_root_trie,
     const std::vector<bool> &batch_start, size_t beam_size,
     size_t num_processes, int blank_id = 0, int space_id = -1,
-    double cutoff_prob = 0.999, Scorer *ext_scorer = nullptr);
+    double cutoff_prob = 0.999, Scorer *ext_scorer = nullptr,
+    const std::vector<HotWordsBoosting *> *batch_hotwords = nullptr,
+    bool use_ngram_score = false);
 
 /* Map vector of int to string
 

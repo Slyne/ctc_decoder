@@ -26,6 +26,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Copyright (c) 2022，DeepSpeech Authors
+//               2023, 58.com(Wuba) Inc AI Lab
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+// Modified from DeepSpeech(https://github.com/mozilla/DeepSpeech)
+
 #include "ctc_beam_search_decoder.h"
 #include <algorithm>
 #include <cmath>
@@ -34,6 +49,7 @@
 #include <limits>
 #include <map>
 #include <utility>
+#include <unordered_map>
 #include "ThreadPool/ThreadPool.h"
 #include "decoder_utils.h"
 #include "fst/fstlib.h"
@@ -44,7 +60,9 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
     const std::vector<std::vector<double>> &log_probs_seq,
     const std::vector<std::vector<int>> &log_probs_idx, PathTrie &root,
     const bool start, size_t beam_size, int blank_id, int space_id,
-    double cutoff_prob, Scorer *ext_scorer) {
+    double cutoff_prob, Scorer *ext_scorer,
+    HotWordsBoosting *hotwords_scorer,
+    const bool use_ngram_score) {
   if (start) {
     if (ext_scorer != nullptr && !ext_scorer->is_character_based()) {
       auto fst_dict = static_cast<fst::StdVectorFst *>(ext_scorer->dictionary);
@@ -130,9 +148,39 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
             float score = 0.0;
             std::vector<std::string> ngram;
             ngram = ext_scorer->make_ngram(prefix_to_score);
-            score = ext_scorer->get_log_cond_prob(ngram) * ext_scorer->alpha;
+
+            // hot words boosting
+            float hot_boost = 0.0;
+            if (hotwords_scorer != nullptr && !hotwords_scorer->hotwords_dict.empty()){
+                    std::unordered_map<std::string, float>::const_iterator iter;
+                    for (size_t index=0; index < ngram.size(); index ++ ) {
+                        std::string word = "";
+                        // character-based language model, combining chinese characters into words
+                        if (ext_scorer->is_character_based()) {
+                            if(index >= ngram.size() -1){
+                                break;
+                            }
+                            word = std::accumulate(ngram.begin() + index, ngram.end(), std::string{});
+                        } else {
+                            // word-level language model, traverse each word in ngram
+                            word = ngram[index];
+                        }
+                        iter = hotwords_scorer->hotwords_dict.find(word);
+                        if (iter != hotwords_scorer->hotwords_dict.end()) {
+                            hot_boost += iter->second;
+                        }
+                    }
+                }
+            if (use_ngram_score){
+                // ngram score and hotwords score
+                score = ((ext_scorer->get_log_cond_prob((ngram)) + hot_boost) * ext_scorer->alpha) + ext_scorer->beta;
+            }
+            else{
+                 // only consider hotwords score
+                score = hot_boost;
+            }
             log_p += score;
-            log_p += ext_scorer->beta;
+
           }
 
           prefix_new->log_prob_nb_cur =
@@ -204,7 +252,9 @@ ctc_beam_search_decoder_batch(
     std::vector<PathTrie *> &batch_root_trie,
     const std::vector<bool> &batch_start, size_t beam_size,
     size_t num_processes, int blank_id, int space_id, double cutoff_prob,
-    Scorer *ext_scorer) {
+    Scorer *ext_scorer,
+    const std::vector<HotWordsBoosting *> *hotwords_scorer,
+    bool use_ngram_score) {
   // thread pool
   ThreadPool pool(num_processes);
   // number of samples
@@ -215,12 +265,22 @@ ctc_beam_search_decoder_batch(
   std::vector<std::future<std::vector<std::pair<double, std::vector<int>>>>>
       res;
 
-  for (size_t i = 0; i < batch_size; ++i) {
-    res.emplace_back(
-        pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
-                     std::ref(batch_log_probs_idx[i]),
-                     std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
-                     blank_id, space_id, cutoff_prob, ext_scorer));
+  if (hotwords_scorer != nullptr)
+      for (size_t i = 0; i < batch_size; ++i) {
+          res.emplace_back(
+                  pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
+                               std::ref(batch_log_probs_idx[i]),
+                               std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
+                               blank_id, space_id, cutoff_prob, ext_scorer, (*hotwords_scorer)[i], use_ngram_score));
+      }
+  else{
+      for (size_t i = 0; i < batch_size; ++i) {
+          res.emplace_back(
+                  pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
+                               std::ref(batch_log_probs_idx[i]),
+                               std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
+                               blank_id, space_id, cutoff_prob, ext_scorer, nullptr, use_ngram_score));
+      }
   }
 
   // get decoding results

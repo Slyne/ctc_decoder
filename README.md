@@ -55,3 +55,11 @@ How language model in called in this implementation of ctc prefix beam search ?
 
 If the language model is char based (like the Mandarin lm), it will call the language model scorer all the times.
 If the language model is word based (like the English lm), it will only call the scorer whenever `space_id` is detected.
+
+### Adding hotwords
+Hotwords are based on ngram language model，please use the following steps.
+* first, initialize the kenlm language model.
+* second, setting parameters use_ngram_score True or False, default is False.
+* third, building a hotwords dictionary.
+* finally, when decoding, if you use character-based language model, the first step is to combine Chinese characters into words, if words in hotwords dictionary then add hotwords socre.
+if you use word-level language model, all words in the fixed window will be enumerated. Please refer to ```swig/test/test_zh.py``` for how to decode with hotwords boosting.

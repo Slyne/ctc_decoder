@@ -3,7 +3,8 @@ import numpy as np
 import logging
 from swig_decoders import TrieVector, ctc_beam_search_decoder_batch, \
                             map_sent, map_batch, \
-                            PathTrie, TrieVector
+                            PathTrie, TrieVector, \
+                            Scorer, HotWordsBoosting, BatchHotwords
 import multiprocessing
 
 logging.basicConfig(filename='out.log', level=logging.INFO)
@@ -104,6 +105,61 @@ def load_vocab(vocab_file):
             vocab.append(line[0])
     return vocab
 
+def test_prefix_beam_search_hotwords(batch_log_ctc_probs, batch_lens, beam_size, blank_id, space_id, lm_path, vocab_list, cutoff_prob=0.999):
+    """
+    Prefix beam search
+    Params:
+        batch_log_probs: B x T x V, the log probabilities of a sequence
+        batch_lens: B, the actual length of each sequence
+    Return:
+        hyps: a batch of beam candidates for each sequence
+        [[(score, cand_list1), (score, cand_list2), ....(score, cand_list_beam)],
+         [(score, cand_list1), (score, candi_list2), ...],
+         ...
+         []]
+    """
+    # batch_log_probs_seq, batch_log_probs_idx = torch.topk(batch_log_ctc_probs, beam_size, dim=-1)
+    batch_log_probs_idx = np.argsort(batch_log_ctc_probs, axis=-1)[:, :, ::-1]
+    batch_log_probs_seq = np.sort(batch_log_ctc_probs, axis=-1)[:, :, ::-1]
+    batch_log_probs_seq_list = batch_log_probs_seq.tolist()
+    batch_log_probs_idx_list = batch_log_probs_idx.tolist()
+    batch_len_list = batch_lens.tolist()
+    batch_log_probs_seq = []
+    batch_log_probs_ids = []
+    batch_start = []
+    batch_root = TrieVector()
+    root_dict = {}
+    scorer = Scorer(0.5, 0.5, lm_path, vocab_list)
+    batchhotwords = BatchHotwords()
+    #In the first badcase, there is a big difference in scoring between the optimal path and other paths.
+    hot_words = {'极点': 5, '换一': -3.40282e+38, '首歌': -100, '换歌': 3.40282e+38}
+    # hot_words = {}
+    hotwords_scorer = HotWordsBoosting(hot_words)
+    for i in range(len(batch_len_list)):
+        num_sent = batch_len_list[i]
+        batch_log_probs_seq.append(batch_log_probs_seq_list[i][0:num_sent])
+        batch_log_probs_ids.append(batch_log_probs_idx_list[i][0:num_sent])
+        root_dict[i] = PathTrie()
+        batch_root.append(root_dict[i])
+        batch_start.append(True)
+        batchhotwords.append(hotwords_scorer)
+    num_processes = min(multiprocessing.cpu_count()-1, len(batch_log_probs_seq))
+
+    score_hyps = ctc_beam_search_decoder_batch(batch_log_probs_seq,
+                                               batch_log_probs_ids,
+                                               batch_root,
+                                               batch_start,
+                                               beam_size,
+                                               num_processes,
+                                               blank_id,
+                                               space_id,
+                                               cutoff_prob,
+                                               scorer,
+                                               batchhotwords,
+                                               use_ngram_score=False)
+    return score_hyps
+
+
 if __name__ == "__main__":
     input = "data/test.npz"
     word = "data/words.txt"
@@ -140,3 +196,52 @@ if __name__ == "__main__":
     sent_ids = score_hyps[0][0][1]
     one_sent = test_map_sent(sent_ids, vocab_list, False, blank_id)
     logging.info(one_sent)
+
+    batch_ids = []
+    logging.info("Test ctc prefix beam search all hyps")
+    for i in range(len(score_hyps)):
+        for j in range(len(score_hyps[i])):
+            batch_ids.append(score_hyps[i][j][1])
+
+    batch_map_sents = test_map_batch(batch_ids, vocab_list, blank_id)
+    logging.info(batch_map_sents)
+
+
+    logging.info("Test hotwords boosting with character-level language models during ctc prefix beam search")
+    character_lm="lm/character_corpus.arpa"
+    score_hyps = test_prefix_beam_search_hotwords(batch_log_ctc_probs,
+                                         batch_len,
+                                         beam_size,
+                                         blank_id,
+                                         space_id,
+                                         character_lm,
+                                         vocab_list,
+                                         cutoff_prob=0.999,
+                                        )
+    batch_ids = []
+    for i in range(len(score_hyps)):
+        for j in range(len(score_hyps[i])):
+            batch_ids.append(score_hyps[i][j][1])
+
+    batch_map_sents = test_map_batch(batch_ids, vocab_list, blank_id)
+    logging.info(batch_map_sents)
+
+
+    logging.info("Test hotwords boosting with word-level language models during ctc prefix beam search")
+    word_lm = "lm/segmented_corpus.arpa"
+    score_hyps = test_prefix_beam_search_hotwords(batch_log_ctc_probs,
+                                         batch_len,
+                                         beam_size,
+                                         blank_id,
+                                         space_id,
+                                         word_lm,
+                                         vocab_list,
+                                         cutoff_prob=0.999,
+                                         )
+    batch_ids = []
+    for i in range(len(score_hyps)):
+        for j in range(len(score_hyps[i])):
+            batch_ids.append(score_hyps[i][j][1])
+
+    batch_map_sents = test_map_batch(batch_ids, vocab_list, blank_id)
+    logging.info(batch_map_sents)
