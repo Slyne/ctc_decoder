@@ -144,13 +144,12 @@ def test_prefix_beam_search_hotwords(batch_log_ctc_probs, batch_lens, beam_size,
         batch_root.append(root_dict[i])
         batch_start.append(True)
         if i == 0:
-            hotwords_scorer = HotWordsBoosting(hot_words1, vocab_list)
+            hotwords_scorer_dict[i] = HotWordsBoosting(hot_words1, vocab_list)
         else:
-            hotwords_scorer = HotWordsBoosting(hot_words2, vocab_list)
-        hotwords_scorer_dict[i] = hotwords_scorer
+            hotwords_scorer_dict[i] = HotWordsBoosting(hot_words2, vocab_list)
         # don't use hotwords. set batch_hotwords_scorer=None or
         # batch_hotwords_scorer.append(None) or batch_hotwords_scorer.append(HotWordsBoosting({}, vocab_list))
-        batch_hotwords_scorer.append(hotwords_scorer)
+        batch_hotwords_scorer.append(hotwords_scorer_dict[i])
     num_processes = min(multiprocessing.cpu_count()-1, len(batch_log_probs_seq))
 
     score_hyps = ctc_beam_search_decoder_batch(batch_log_probs_seq,
