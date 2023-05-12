@@ -49,7 +49,6 @@
 #include <limits>
 #include <map>
 #include <utility>
-#include <unordered_map>
 #include "ThreadPool/ThreadPool.h"
 #include "decoder_utils.h"
 #include "fst/fstlib.h"
@@ -61,8 +60,7 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
     const std::vector<std::vector<int>> &log_probs_idx, PathTrie &root,
     const bool start, size_t beam_size, int blank_id, int space_id,
     double cutoff_prob, Scorer *ext_scorer,
-    HotWordsBoosting *hotwords_scorer,
-    const bool use_ngram_score) {
+    HotWordsBoosting *hotwords_scorer) {
   if (start) {
     if (ext_scorer != nullptr && !ext_scorer->is_character_based()) {
       auto fst_dict = static_cast<fst::StdVectorFst *>(ext_scorer->dictionary);
@@ -135,54 +133,46 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
             log_p = log_prob_c + prefix->score;
           }
 
-          // language model scoring
-          if (ext_scorer != nullptr &&
-              (c == space_id || ext_scorer->is_character_based())) {
-            PathTrie *prefix_to_score = nullptr;
-            // skip scoring the space
-            if (ext_scorer->is_character_based()) {
-              prefix_to_score = prefix_new;
-            } else {
-              prefix_to_score = prefix;
-            }
-            float score = 0.0;
-            std::vector<std::string> ngram;
-            ngram = ext_scorer->make_ngram(prefix_to_score);
-
-            // hot words boosting
-            float hot_boost = 0.0;
-            if (hotwords_scorer != nullptr && !hotwords_scorer->hotwords_dict.empty()){
-                    std::unordered_map<std::string, float>::const_iterator iter;
-                    for (size_t index=0; index < ngram.size(); index ++ ) {
-                        std::string word = "";
-                        // character-based language model, combining chinese characters into words
-                        if (ext_scorer->is_character_based()) {
-                            if(index >= ngram.size() -1){
-                                break;
-                            }
-                            word = std::accumulate(ngram.begin() + index, ngram.end(), std::string{});
-                        } else {
-                            // word-level language model, traverse each word in ngram
-                            word = ngram[index];
-                        }
-                        iter = hotwords_scorer->hotwords_dict.find(word);
-                        if (iter != hotwords_scorer->hotwords_dict.end()) {
-                            hot_boost += iter->second;
-                        }
-                    }
-                }
-            if (use_ngram_score){
-                // ngram score and hotwords score
-                score = ((ext_scorer->get_log_cond_prob((ngram)) + hot_boost) * ext_scorer->alpha) + ext_scorer->beta;
-            }
-            else{
-                 // only consider hotwords score
-                score = hot_boost;
-            }
-            log_p += score;
-
+          // hotwords boosting
+          float hotwords_score = 0.0;
+          std::vector<std::string> ngram;
+          PathTrie *prefix_to_score = nullptr;
+          if (hotwords_scorer != nullptr && !hotwords_scorer->hotwords_dict.empty()) {
+              if (hotwords_scorer->is_character_based) {
+                  prefix_to_score = prefix_new;
+              } else {
+                  prefix_to_score = prefix;
+              }
+              int offset;
+              std::tie(offset,ngram) = hotwords_scorer->make_ngram(prefix_to_score);
+              hotwords_score = hotwords_scorer->get_hotwords_score(ngram, offset);
           }
+          log_p += hotwords_score;
 
+          // language model scoring
+          float ngram_score = 0.0;
+          if (ext_scorer != nullptr ) {
+              if (hotwords_scorer != nullptr && !hotwords_scorer->hotwords_dict.empty() &&
+                !(hotwords_scorer->is_character_based ^ ext_scorer->is_character_based()) &&
+                hotwords_scorer->window_length >= ext_scorer->get_max_order()) {
+                  std::vector<std::string>::const_iterator first = ngram.end() - ext_scorer->get_max_order();
+                  std::vector<std::string>::const_iterator last  = ngram.end();
+                  std::vector<std::string> slice_ngram(first, last);
+                  ngram_score = ext_scorer->get_log_cond_prob(slice_ngram) * ext_scorer->alpha + ext_scorer->beta;
+              } else {
+                  if (c == space_id || ext_scorer->is_character_based()) {
+                      // skip scoring the space
+                      if (ext_scorer->is_character_based()) {
+                          prefix_to_score = prefix_new;
+                      } else {
+                          prefix_to_score = prefix;
+                      }
+                      ngram = ext_scorer->make_ngram(prefix_to_score);
+                      ngram_score = ext_scorer->get_log_cond_prob(ngram) * ext_scorer->alpha + ext_scorer->beta;
+                  }
+              }
+          }
+          log_p += ngram_score;
           prefix_new->log_prob_nb_cur =
               log_sum_exp(prefix_new->log_prob_nb_cur, log_p);
         }
@@ -253,8 +243,7 @@ ctc_beam_search_decoder_batch(
     const std::vector<bool> &batch_start, size_t beam_size,
     size_t num_processes, int blank_id, int space_id, double cutoff_prob,
     Scorer *ext_scorer,
-    const std::vector<HotWordsBoosting *> *hotwords_scorer,
-    bool use_ngram_score) {
+    const std::vector<HotWordsBoosting *> *batch_hotwords_scorer) {
   // thread pool
   ThreadPool pool(num_processes);
   // number of samples
@@ -265,13 +254,13 @@ ctc_beam_search_decoder_batch(
   std::vector<std::future<std::vector<std::pair<double, std::vector<int>>>>>
       res;
 
-  if (hotwords_scorer != nullptr)
+  if (batch_hotwords_scorer != nullptr)
       for (size_t i = 0; i < batch_size; ++i) {
           res.emplace_back(
                   pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
                                std::ref(batch_log_probs_idx[i]),
                                std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
-                               blank_id, space_id, cutoff_prob, ext_scorer, (*hotwords_scorer)[i], use_ngram_score));
+                               blank_id, space_id, cutoff_prob, ext_scorer, (*batch_hotwords_scorer)[i]));
       }
   else{
       for (size_t i = 0; i < batch_size; ++i) {
@@ -279,7 +268,7 @@ ctc_beam_search_decoder_batch(
                   pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
                                std::ref(batch_log_probs_idx[i]),
                                std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
-                               blank_id, space_id, cutoff_prob, ext_scorer, nullptr, use_ngram_score));
+                               blank_id, space_id, cutoff_prob, ext_scorer, nullptr));
       }
   }
 

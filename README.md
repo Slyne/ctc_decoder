@@ -57,9 +57,7 @@ If the language model is char based (like the Mandarin lm), it will call the lan
 If the language model is word based (like the English lm), it will only call the scorer whenever `space_id` is detected.
 
 ### Adding hotwords
-Hotwords are based on ngram language model，please use the following steps.
-* first, initialize the kenlm language model.
-* second, setting parameters use_ngram_score True or False, default is False.
-* third, building a hotwords dictionary.
-* finally, when decoding, if you use character-based language model, the first step is to combine Chinese characters into words, if words in hotwords dictionary then add hotwords socre.
-if you use word-level language model, all words in the fixed window will be enumerated. Please refer to ```swig/test/test_zh.py``` for how to decode with hotwords boosting.
+Please refer to the following steps how to use hotwordsboosting.
+* First, initialize the HotWordsBoosting class. Set the following parameters hotwords_dict, char_list, window_length, SPACE_ID, is_character_based, hotwords_dict and char_list parameters must be passed.
+* Second, when decoding, if you set is_character_based is True (default mode), the first step is to combine Chinese characters into words, if words in hotwords dictionary then add hotwords score.
+if you set is_character_based is False, all words in the fixed window will be enumerated. Please refer to ```swig/test/test_zh.py``` for how to decode with hotwordsboosting.

@@ -31,7 +31,7 @@ namespace std {
     %template(TrieVector) std::vector<PathTrie*>;
     %template(BoolVector) std::vector<bool>;
     %template(HotWordsMap) unordered_map<string, float>;
-    %template(BatchHotwords) std::vector<HotWordsBoosting *>;
+    %template(BatchHotWordsScorer) std::vector<HotWordsBoosting *>;
 }
 %template(IntDoublePairCompSecondRev) pair_comp_second_rev<int, double>;
 %template(StringDoublePairCompSecondRev) pair_comp_second_rev<std::string, double>;

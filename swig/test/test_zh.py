@@ -3,8 +3,8 @@ import numpy as np
 import logging
 from swig_decoders import TrieVector, ctc_beam_search_decoder_batch, \
                             map_sent, map_batch, \
-                            PathTrie, TrieVector, \
-                            Scorer, HotWordsBoosting, BatchHotwords
+                            PathTrie, \
+                            Scorer, HotWordsBoosting, BatchHotWordsScorer
 import multiprocessing
 
 logging.basicConfig(filename='out.log', level=logging.INFO)
@@ -130,11 +130,12 @@ def test_prefix_beam_search_hotwords(batch_log_ctc_probs, batch_lens, beam_size,
     batch_root = TrieVector()
     root_dict = {}
     scorer = Scorer(0.5, 0.5, lm_path, vocab_list)
-    batchhotwords = BatchHotwords()
+    batch_hotwords_scorer = BatchHotWordsScorer()
     #In the first badcase, there is a big difference in scoring between the optimal path and other paths.
-    hot_words = {'极点': 5, '换一': -3.40282e+38, '首歌': -100, '换歌': 3.40282e+38}
-    # hot_words = {}
-    hotwords_scorer = HotWordsBoosting(hot_words)
+    hot_words1 = {'换一': -3.40282e+38, '首歌': -100, '换歌': 3.40282e+38}
+    hot_words2 = {'极点': 5}
+    #hot_words = {}
+    hotwords_scorer_dict = {}
     for i in range(len(batch_len_list)):
         num_sent = batch_len_list[i]
         batch_log_probs_seq.append(batch_log_probs_seq_list[i][0:num_sent])
@@ -142,7 +143,14 @@ def test_prefix_beam_search_hotwords(batch_log_ctc_probs, batch_lens, beam_size,
         root_dict[i] = PathTrie()
         batch_root.append(root_dict[i])
         batch_start.append(True)
-        batchhotwords.append(hotwords_scorer)
+        if i == 0:
+            hotwords_scorer = HotWordsBoosting(hot_words1, vocab_list)
+        else:
+            hotwords_scorer = HotWordsBoosting(hot_words2, vocab_list)
+        hotwords_scorer_dict[i] = hotwords_scorer
+        # don't use hotwords. set batch_hotwords_scorer=None or
+        # batch_hotwords_scorer.append(None) or batch_hotwords_scorer.append(HotWordsBoosting({}, vocab_list))
+        batch_hotwords_scorer.append(hotwords_scorer)
     num_processes = min(multiprocessing.cpu_count()-1, len(batch_log_probs_seq))
 
     score_hyps = ctc_beam_search_decoder_batch(batch_log_probs_seq,
@@ -155,8 +163,7 @@ def test_prefix_beam_search_hotwords(batch_log_ctc_probs, batch_lens, beam_size,
                                                space_id,
                                                cutoff_prob,
                                                scorer,
-                                               batchhotwords,
-                                               use_ngram_score=False)
+                                               batch_hotwords_scorer)
     return score_hyps
 
 

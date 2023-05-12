@@ -16,15 +16,32 @@
 #ifndef HOTWORDS_H
 #define HOTWORDS_H
 
+#include <iostream>
 #include <string>
 #include <unordered_map>
-#include <iostream>
 
-class HotWordsBoosting{
+#include "scorer.h"
+
+class HotWordsBoosting {
   public:
-    std::unordered_map<std::string, float> hotwords_dict;
-    HotWordsBoosting(const std::unordered_map<std::string, float> &hotwords_dict);
+    HotWordsBoosting(const std::unordered_map<std::string, float> &hotwords_dict, const std::vector<std::string>& char_list,
+                     int window_length=4, int SPACE_ID=-1, bool is_character_based=true);
     ~HotWordsBoosting();
+
+    // make ngram for a given prefix
+    std::pair<int, std::vector<std::string>> make_ngram(PathTrie *prefix);
+
+    // translate the vector in index to string
+    std::string vec2str(const std::vector<int>& input);
+
+    // add hotwords score
+    float get_hotwords_score(const std::vector<std::string>& words, int begin_index);
+
+    std::unordered_map<std::string, float> hotwords_dict;
+    int window_length;
+    int SPACE_ID;
+    bool is_character_based;
+    std::vector<std::string> char_list;
 };
 
 #endif  // HOTWORDS_H
