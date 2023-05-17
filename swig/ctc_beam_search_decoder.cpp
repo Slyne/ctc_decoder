@@ -60,7 +60,7 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
     const std::vector<std::vector<int>> &log_probs_idx, PathTrie &root,
     const bool start, size_t beam_size, int blank_id, int space_id,
     double cutoff_prob, Scorer *ext_scorer,
-    HotWordsBoosting *hotwords_scorer) {
+    HotWordsScorer *hotwords_scorer) {
   if (start) {
     if (ext_scorer != nullptr && !ext_scorer->is_character_based()) {
       auto fst_dict = static_cast<fst::StdVectorFst *>(ext_scorer->dictionary);
@@ -243,7 +243,7 @@ ctc_beam_search_decoder_batch(
     const std::vector<bool> &batch_start, size_t beam_size,
     size_t num_processes, int blank_id, int space_id, double cutoff_prob,
     Scorer *ext_scorer,
-    const std::vector<HotWordsBoosting *> *batch_hotwords_scorer) {
+    HotWordsScorer *hotwords_scorer) {
   // thread pool
   ThreadPool pool(num_processes);
   // number of samples
@@ -254,22 +254,12 @@ ctc_beam_search_decoder_batch(
   std::vector<std::future<std::vector<std::pair<double, std::vector<int>>>>>
       res;
 
-  if (batch_hotwords_scorer != nullptr)
-      for (size_t i = 0; i < batch_size; ++i) {
-          res.emplace_back(
-                  pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
-                               std::ref(batch_log_probs_idx[i]),
-                               std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
-                               blank_id, space_id, cutoff_prob, ext_scorer, (*batch_hotwords_scorer)[i]));
-      }
-  else{
-      for (size_t i = 0; i < batch_size; ++i) {
-          res.emplace_back(
-                  pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
-                               std::ref(batch_log_probs_idx[i]),
-                               std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
-                               blank_id, space_id, cutoff_prob, ext_scorer, nullptr));
-      }
+  for (size_t i = 0; i < batch_size; ++i) {
+    res.emplace_back(
+        pool.enqueue(ctc_beam_search_decoder, std::ref(batch_log_probs_seq[i]),
+                     std::ref(batch_log_probs_idx[i]),
+                     std::ref(*batch_root_trie[i]), batch_start[i], beam_size,
+                     blank_id, space_id, cutoff_prob, ext_scorer, hotwords_scorer));
   }
 
   // get decoding results

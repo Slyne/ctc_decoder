@@ -80,7 +80,7 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
     const std::vector<std::vector<int>> &log_probs_idx, PathTrie &root,
     const bool start, size_t beam_size, int blank_id = 0, int space_id = -1,
     double cutoff_prob = 0.999, Scorer *ext_scorer = nullptr,
-    HotWordsBoosting *hotwords_scorer = nullptr);
+    HotWordsScorer *hotwords_scorer = nullptr);
 
 /* CTC Beam Search Decoder for batch data
 
@@ -103,8 +103,8 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
  *     ext_scorer: External scorer to evaluate a prefix, which consists of
  *                 n-gram language model scoring and word insertion term.
  *                 Default null, decoding the input sample without scorer.
- *     batch_hotwords_scorer: External scorer to add hotwords score.
- *                 Different audios correspond to different hotwords_scorer. Default null.
+ *     hotwords_scorer: External scorer to add hotwords score. Default null,
+ *                 decoding the input sample without hotwordsboosting.
  * Return:
  *     A 2-D vector that each element is a vector of beam search decoding
  *     result for one audio sample.
@@ -117,7 +117,7 @@ ctc_beam_search_decoder_batch(
     const std::vector<bool> &batch_start, size_t beam_size,
     size_t num_processes, int blank_id = 0, int space_id = -1,
     double cutoff_prob = 0.999, Scorer *ext_scorer = nullptr,
-    const std::vector<HotWordsBoosting *> *batch_hotwords_scorer = nullptr);
+    HotWordsScorer *hotwords_scorer = nullptr);
 
 /* Map vector of int to string
 

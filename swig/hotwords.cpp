@@ -20,7 +20,7 @@
 #include "hotwords.h"
 #include "scorer.h"
 
-HotWordsBoosting::HotWordsBoosting(const std::unordered_map<std::string, float> &hotwords_dict, const std::vector<std::string>& char_list,
+HotWordsScorer::HotWordsScorer(const std::unordered_map<std::string, float> &hotwords_dict, const std::vector<std::string>& char_list,
                                    int window_length, int SPACE_ID, bool is_character_based) {
     this->hotwords_dict = hotwords_dict;
     this->window_length = window_length;
@@ -29,10 +29,10 @@ HotWordsBoosting::HotWordsBoosting(const std::unordered_map<std::string, float> 
     this->char_list = char_list;
 }
 
-HotWordsBoosting::~HotWordsBoosting(){
+HotWordsScorer::~HotWordsScorer(){
 }
 
-std::string HotWordsBoosting::vec2str(const std::vector<int>& input) {
+std::string HotWordsScorer::vec2str(const std::vector<int>& input) {
     std::string word;
     for (auto ind : input) {
         word += this->char_list[ind];
@@ -40,7 +40,7 @@ std::string HotWordsBoosting::vec2str(const std::vector<int>& input) {
     return word;
 }
 
-std::pair<int, std::vector<std::string>> HotWordsBoosting::make_ngram(PathTrie* prefix){
+std::pair<int, std::vector<std::string>> HotWordsScorer::make_ngram(PathTrie* prefix){
     std::vector<std::string> ngram;
     PathTrie* current_node = prefix;
     PathTrie* new_node = nullptr;
@@ -74,18 +74,19 @@ std::pair<int, std::vector<std::string>> HotWordsBoosting::make_ngram(PathTrie* 
     return result;
 }
 
-float HotWordsBoosting::get_hotwords_score(const std::vector<std::string>& words, int offset) {
+float HotWordsScorer::get_hotwords_score(const std::vector<std::string>& words, int offset) {
     float hotwords_score = 0;
     int words_size = words.size();
     std::unordered_map<std::string, float>::const_iterator iter;
     for (size_t index = 0; index < words_size; index++) {
         std::string word = "";
         if (this->is_character_based) {
-            // chinese characters in fixed window, combining chinese characters into words.
+            // contains at least two chinese characters.
+            // words.end()-words.begin()-offset-index+1=words.size()-1-offset-index+1>=2
             if( words_size - offset - index <= 1) {
                 break;
             }
-            // words.end()-words.begin()-offset-index+1=words.size()-1-offset-index+1>=2
+            // chinese characters in fixed window, combining chinese characters into words.
             // word = std::accumulate(words.begin() + offset, words.end() - index, std::string{});
             word = std::accumulate(words.begin() + offset + index, words.end(), std::string{});
         } else {

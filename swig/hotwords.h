@@ -22,11 +22,11 @@
 
 #include "scorer.h"
 
-class HotWordsBoosting {
+class HotWordsScorer {
   public:
-    HotWordsBoosting(const std::unordered_map<std::string, float> &hotwords_dict, const std::vector<std::string>& char_list,
+    HotWordsScorer(const std::unordered_map<std::string, float> &hotwords_dict, const std::vector<std::string>& char_list,
                      int window_length=4, int SPACE_ID=-1, bool is_character_based=true);
-    ~HotWordsBoosting();
+    ~HotWordsScorer();
 
     // make ngram for a given prefix
     std::pair<int, std::vector<std::string>> make_ngram(PathTrie *prefix);

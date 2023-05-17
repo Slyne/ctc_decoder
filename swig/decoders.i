@@ -31,7 +31,6 @@ namespace std {
     %template(TrieVector) std::vector<PathTrie*>;
     %template(BoolVector) std::vector<bool>;
     %template(HotWordsMap) unordered_map<string, float>;
-    %template(BatchHotWordsScorer) std::vector<HotWordsBoosting *>;
 }
 %template(IntDoublePairCompSecondRev) pair_comp_second_rev<int, double>;
 %template(StringDoublePairCompSecondRev) pair_comp_second_rev<std::string, double>;
@@ -41,4 +40,3 @@ namespace std {
 %include "scorer.h"
 %include "path_trie.h"
 %include "ctc_beam_search_decoder.h"
-
