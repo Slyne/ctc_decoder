@@ -90,8 +90,11 @@ float HotWordsScorer::get_hotwords_score(const std::vector<std::string>& words, 
             // word = std::accumulate(words.begin() + offset, words.end() - index, std::string{});
             word = std::accumulate(words.begin() + offset + index, words.end(), std::string{});
         } else {
-            // word in fixed window, traverse each word in words.
-            word = words[index];
+            // word in fixed window, traverse each word in words, skip <s> token.
+            if (index + offset >= words_size) {
+                break;
+            }
+            word = words[index + offset];
         }
         iter = this->hotwords_dict.find(word);
         if (iter != this->hotwords_dict.end()) {
