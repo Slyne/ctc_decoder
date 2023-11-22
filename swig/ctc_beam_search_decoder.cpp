@@ -137,7 +137,8 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
           float hotwords_score = 0.0;
           std::vector<std::string> ngram;
           PathTrie *prefix_to_score = nullptr;
-          if (hotwords_scorer != nullptr && !hotwords_scorer->hotwords_dict.empty()) {
+          if (hotwords_scorer != nullptr && !hotwords_scorer->hotwords_dict.empty() &&
+          (c == space_id || hotwords_scorer->is_character_based)) {
               if (hotwords_scorer->is_character_based) {
                   prefix_to_score = prefix_new;
               } else {
@@ -151,7 +152,7 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
 
           // language model scoring
           float ngram_score = 0.0;
-          if (ext_scorer != nullptr ) {
+          if (ext_scorer != nullptr && (c == space_id || ext_scorer->is_character_based())) {
               if (hotwords_scorer != nullptr && !hotwords_scorer->hotwords_dict.empty() &&
                 !(hotwords_scorer->is_character_based ^ ext_scorer->is_character_based()) &&
                 hotwords_scorer->window_length >= ext_scorer->get_max_order()) {
@@ -159,17 +160,15 @@ std::vector<std::pair<double, std::vector<int>>> ctc_beam_search_decoder(
                   std::vector<std::string>::const_iterator last  = ngram.end();
                   std::vector<std::string> slice_ngram(first, last);
                   ngram_score = ext_scorer->get_log_cond_prob(slice_ngram) * ext_scorer->alpha + ext_scorer->beta;
-              } else {
-                  if (c == space_id || ext_scorer->is_character_based()) {
-                      // skip scoring the space
-                      if (ext_scorer->is_character_based()) {
-                          prefix_to_score = prefix_new;
-                      } else {
-                          prefix_to_score = prefix;
-                      }
-                      ngram = ext_scorer->make_ngram(prefix_to_score);
-                      ngram_score = ext_scorer->get_log_cond_prob(ngram) * ext_scorer->alpha + ext_scorer->beta;
+              }
+              else {
+                  if (ext_scorer->is_character_based()) {
+                      prefix_to_score = prefix_new;
+                  } else {
+                      prefix_to_score = prefix;
                   }
+                  ngram = ext_scorer->make_ngram(prefix_to_score);
+                  ngram_score = ext_scorer->get_log_cond_prob(ngram) * ext_scorer->alpha + ext_scorer->beta;
               }
           }
           log_p += ngram_score;
